@@ -275,7 +275,7 @@ class FringePatternApp:
         ax.cla()
         ax.set_facecolor("#000")
         ext = [y2d[0]*1e3, y2d[-1]*1e3, x2d[0]*1e3, x2d[-1]*1e3]
-        ax.imshow(I2D, aspect="auto", extent=ext, origin="lower",
+        ax.imshow(I2D.T, aspect="auto", extent=ext, origin="lower",
                   cmap=FRINGE_CMAP, interpolation="bilinear")
         ax.set_xlabel("Screen position y (mm)", fontsize=9)
         ax.set_ylabel("x (mm)", fontsize=9)
