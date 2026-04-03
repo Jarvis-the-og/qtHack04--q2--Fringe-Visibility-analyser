@@ -2,6 +2,12 @@
 Simulation 1: Two Beams Variation
 Demonstrates how unequal beam intensities affect the combined intensity profile
 and fringe visibility in real time.
+
+PATCHES APPLIED:
+  - FIX 1: Removed spurious `+ np.pi/4` hardcoded offset from Beam 2's formula.
+            I_beam2 now correctly uses `phi` alone, matching the combined formula.
+  - FIX 2: Individual beam formulas now fully consistent with the combined
+            interference formula — Beam 1 at phase 0, Beam 2 at phase Δφ.
 """
 
 import tkinter as tk
@@ -12,7 +18,6 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.gridspec import GridSpec
-import matplotlib.patches as mpatches
 
 # ── Colour Palette ──────────────────────────────────────────────────────────
 BG        = "#0d0f14"
@@ -26,16 +31,16 @@ SLIDER_BG = "#1c2030"
 HIGHLIGHT = "#252a3a"
 
 matplotlib.rcParams.update({
-    "axes.facecolor":  PANEL,
+    "axes.facecolor":   PANEL,
     "figure.facecolor": BG,
-    "axes.edgecolor":  HIGHLIGHT,
-    "axes.labelcolor": TEXT,
-    "xtick.color":     SUBTEXT,
-    "ytick.color":     SUBTEXT,
-    "text.color":      TEXT,
-    "grid.color":      HIGHLIGHT,
-    "grid.linewidth":  0.6,
-    "font.family":     "monospace",
+    "axes.edgecolor":   HIGHLIGHT,
+    "axes.labelcolor":  TEXT,
+    "xtick.color":      SUBTEXT,
+    "ytick.color":      SUBTEXT,
+    "text.color":       TEXT,
+    "grid.color":       HIGHLIGHT,
+    "grid.linewidth":   0.6,
+    "font.family":      "monospace",
 })
 
 
@@ -47,7 +52,6 @@ class TwoBeamsApp:
         root.geometry("1200x780")
         root.resizable(True, True)
 
-        # ── State variables ─────────────────────────────────────────────────
         self.I1  = tk.DoubleVar(value=1.0)
         self.I2  = tk.DoubleVar(value=1.0)
         self.phi = tk.DoubleVar(value=0.0)   # phase offset in degrees
@@ -58,7 +62,6 @@ class TwoBeamsApp:
 
     # ── UI Construction ──────────────────────────────────────────────────────
     def _build_ui(self):
-        # Header
         hdr = tk.Frame(self.root, bg=BG, pady=10)
         hdr.pack(fill="x", padx=20)
         tk.Label(hdr, text="TWO BEAMS VARIATION",
@@ -66,17 +69,14 @@ class TwoBeamsApp:
         tk.Label(hdr, text="  ·  interference intensity & fringe quality",
                  font=("Courier", 11), fg=SUBTEXT, bg=BG).pack(side="left", pady=6)
 
-        # Main layout
         main = tk.Frame(self.root, bg=BG)
         main.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
-        # Left: control panel
         ctrl = tk.Frame(main, bg=PANEL, relief="flat", bd=0, width=300)
         ctrl.pack(side="left", fill="y", padx=(0, 12), pady=0)
         ctrl.pack_propagate(False)
         self._build_controls(ctrl)
 
-        # Right: matplotlib canvas
         canvas_frame = tk.Frame(main, bg=BG)
         canvas_frame.pack(side="left", fill="both", expand=True)
         self._build_canvas(canvas_frame)
@@ -98,7 +98,8 @@ class TwoBeamsApp:
         tk.Label(top, text=label, font=("Courier", 10), fg=TEXT,
                  bg=PANEL).pack(side="left")
         val_lbl = tk.Label(top, text=fmt.format(var.get()) + unit,
-                           font=("Courier", 10, "bold"), fg=color, bg=PANEL, width=8)
+                           font=("Courier", 10, "bold"), fg=color,
+                           bg=PANEL, width=8)
         val_lbl.pack(side="right")
 
         sl = ttk.Scale(row, from_=from_, to=to, variable=var,
@@ -108,10 +109,8 @@ class TwoBeamsApp:
         def on_change(*_):
             val_lbl.config(text=fmt.format(var.get()) + unit)
             self._update()
-
         var.trace_add("write", on_change)
 
-        # Tick marks (min / max)
         ticks = tk.Frame(row, bg=PANEL)
         ticks.pack(fill="x")
         tk.Label(ticks, text=f"{from_}", font=("Courier", 7),
@@ -145,16 +144,16 @@ class TwoBeamsApp:
                          "#d4aaff", resolution=0.1, fmt="{:.1f}", unit="")
 
         self._section_label(parent, "LIVE METRICS")
-        self.vis_var  = tk.StringVar(value="—")
-        self.imax_var = tk.StringVar(value="—")
-        self.imin_var = tk.StringVar(value="—")
-        self.ratio_var= tk.StringVar(value="—")
+        self.vis_var   = tk.StringVar(value="—")
+        self.imax_var  = tk.StringVar(value="—")
+        self.imin_var  = tk.StringVar(value="—")
+        self.ratio_var = tk.StringVar(value="—")
 
         metrics = [
-            ("Visibility  V", self.vis_var,  COMBINED),
-            ("I_max",         self.imax_var, ACCENT1),
-            ("I_min",         self.imin_var, ACCENT2),
-            ("I₁ / I₂",       self.ratio_var,"#d4aaff"),
+            ("Visibility  V", self.vis_var,   COMBINED),
+            ("I_max",         self.imax_var,  ACCENT1),
+            ("I_min",         self.imin_var,  ACCENT2),
+            ("I₁ / I₂",       self.ratio_var, "#d4aaff"),
         ]
         for lbl, var, col in metrics:
             row = tk.Frame(parent, bg=HIGHLIGHT, pady=6, padx=10)
@@ -164,7 +163,6 @@ class TwoBeamsApp:
             tk.Label(row, textvariable=var, font=("Courier", 11, "bold"),
                      fg=col, bg=HIGHLIGHT).pack(side="right")
 
-        # Formula box
         fbox = tk.Frame(parent, bg="#0a1a2a", pady=10, padx=12)
         fbox.pack(fill="x", padx=14, pady=(20, 0))
         tk.Label(fbox, text="VISIBILITY FORMULA",
@@ -175,7 +173,6 @@ class TwoBeamsApp:
                  font=("Courier", 8), fg=SUBTEXT, bg="#0a1a2a",
                  wraplength=260, justify="center").pack()
 
-        # Reset
         tk.Button(parent, text="⟳  RESET DEFAULTS",
                   font=("Courier", 9, "bold"), fg=BG, bg=ACCENT1,
                   relief="flat", bd=0, pady=6, cursor="hand2",
@@ -186,9 +183,9 @@ class TwoBeamsApp:
         self.fig.subplots_adjust(hspace=0.42, left=0.09, right=0.97,
                                  top=0.93, bottom=0.08)
         gs = GridSpec(2, 2, figure=self.fig)
-        self.ax_main  = self.fig.add_subplot(gs[0, :])   # top: combined pattern
-        self.ax_beam1 = self.fig.add_subplot(gs[1, 0])   # bottom-left: beam 1
-        self.ax_beam2 = self.fig.add_subplot(gs[1, 1])   # bottom-right: beam 2
+        self.ax_main  = self.fig.add_subplot(gs[0, :])
+        self.ax_beam1 = self.fig.add_subplot(gs[1, 0])
+        self.ax_beam2 = self.fig.add_subplot(gs[1, 1])
 
         for ax in (self.ax_main, self.ax_beam1, self.ax_beam2):
             ax.grid(True, linestyle="--", alpha=0.4)
@@ -207,10 +204,16 @@ class TwoBeamsApp:
         k   = self.k.get()
         phi = np.deg2rad(self.phi.get())
 
-        I_combined = (I1 + I2
-                      + 2 * np.sqrt(I1 * I2) * np.cos(k * x + phi))
-        I_beam1    = I1 * (1 + np.cos(k * x))
-        I_beam2    = I2 * (1 + np.cos(k * x + phi + np.pi / 4))
+        # Combined two-beam interference:
+        #   I(x) = I1 + I2 + 2·√(I1·I2)·cos(k·x + Δφ)
+        I_combined = I1 + I2 + 2 * np.sqrt(I1 * I2) * np.cos(k * x + phi)
+
+        # FIX 1 & 2: Individual beam intensity profiles.
+        # Beam 1 is the phase reference (phase = 0).
+        # Beam 2 carries the relative phase shift Δφ.
+        # The spurious hardcoded `+ np.pi/4` on Beam 2 has been removed.
+        I_beam1 = I1 * (1 + np.cos(k * x))
+        I_beam2 = I2 * (1 + np.cos(k * x + phi))
 
         I_max = (np.sqrt(I1) + np.sqrt(I2)) ** 2
         I_min = (np.sqrt(I1) - np.sqrt(I2)) ** 2
@@ -222,8 +225,8 @@ class TwoBeamsApp:
     def _update(self, *_):
         x, ib1, ib2, icom, imax, imin, V = self._compute()
         I1, I2 = self.I1.get(), self.I2.get()
+        phi_deg = self.phi.get()
 
-        # ── metrics labels ───────────────────────────────────────────────────
         self.vis_var.set(f"{V:.4f}")
         self.imax_var.set(f"{imax:.3f}")
         self.imin_var.set(f"{imin:.3f}")
@@ -240,18 +243,19 @@ class TwoBeamsApp:
                    label=f"I_max = {imax:.3f}")
         ax.axhline(imin, color=ACCENT2, lw=1.1, ls="--",
                    label=f"I_min = {imin:.3f}")
-        ax.set_title(f"Combined Intensity Pattern   |   Visibility V = {V:.4f}",
-                     color=TEXT, fontsize=11, pad=8)
+        ax.set_title(
+            f"Combined Intensity Pattern   |   Visibility V = {V:.4f}",
+            color=TEXT, fontsize=11, pad=8)
         ax.set_xlabel("Position  x  (rad)", fontsize=9)
         ax.set_ylabel("Intensity (a.u.)", fontsize=9)
         ax.legend(loc="upper right", fontsize=8,
                   facecolor=PANEL, edgecolor=HIGHLIGHT, labelcolor=TEXT)
-        # Colour gradient fringe overlay
+        # Fringe overlay timed to the combined pattern
         extent = [x[0], x[-1], 0, icom.max() * 1.05]
-        ax.imshow(np.tile(np.cos(self.k.get() * x + np.deg2rad(self.phi.get())),
-                          (30, 1)),
-                  aspect="auto", extent=extent, alpha=0.06,
-                  cmap="bwr", origin="lower")
+        ax.imshow(
+            np.tile(np.cos(self.k.get() * x + np.deg2rad(phi_deg)), (30, 1)),
+            aspect="auto", extent=extent, alpha=0.06,
+            cmap="bwr", origin="lower")
         ax.set_ylim(0, icom.max() * 1.12)
         for sp in ax.spines.values():
             sp.set_edgecolor(HIGHLIGHT)
