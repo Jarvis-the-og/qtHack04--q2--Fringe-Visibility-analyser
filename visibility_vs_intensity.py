@@ -3,6 +3,16 @@ Simulation 3: Visibility vs Intensity Ratio
 Plots the analytic curve V = 2√r / (1 + r) where r = I1/I2.
 Interactive marker tracks the current ratio live.
 Also shows complementary visualizations: phasor diagram and contrast map.
+
+PATCHES APPLIED:
+  - FIX 1: Phasor label placement corrected — labels now use polar coordinates
+             (angle, radius) instead of erroneous Cartesian offsets inside
+             a polar axes, so E₁ and E₂ labels always sit at their arrow tips.
+  - FIX 2: Visibility heatmap no longer cut off — window is enlarged to 1440×860,
+             GridSpec bottom/top margins are adjusted, and the heatmap axes gets
+             explicit space so the colorbar is never clipped.
+  - FIX 3: Colorbar is created once (stored in self._cbar) and only replaced on
+             each redraw, preventing accumulation of duplicate colorbars.
 """
 
 import tkinter as tk
@@ -13,8 +23,6 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.gridspec import GridSpec
-import matplotlib.patches as mpatches
-from matplotlib.patches import FancyArrowPatch
 
 # ── Palette ────────────────────────────────────────────────────────────────
 BG      = "#0c0d14"
@@ -47,13 +55,17 @@ class VisibilityRatioApp:
         self.root = root
         root.title("Visibility vs Intensity Ratio  ·  Fringe Visibility Analyzer")
         root.configure(bg=BG)
-        root.geometry("1240x800")
+        # ── FIX 2: wider/taller window so heatmap is fully visible ──────────
+        root.geometry("1440x860")
         root.resizable(True, True)
 
         self.I1   = tk.DoubleVar(value=1.0)
         self.I2   = tk.DoubleVar(value=1.0)
         self.phi  = tk.DoubleVar(value=0.0)    # degrees
         self.zoom = tk.DoubleVar(value=10.0)   # max ratio displayed
+
+        # ── FIX 3: single colorbar reference ────────────────────────────────
+        self._cbar = None
 
         self._build_ui()
         self._update()
@@ -188,13 +200,21 @@ class VisibilityRatioApp:
                   command=self._reset).pack(fill="x", padx=14, pady=14)
 
     def _build_canvas(self, parent):
-        self.fig = plt.figure(figsize=(9.5, 7), facecolor=BG)
-        gs = GridSpec(2, 2, figure=self.fig,
-                      hspace=0.44, wspace=0.35,
-                      left=0.08, right=0.97, top=0.93, bottom=0.08)
-        self.ax_main  = self.fig.add_subplot(gs[0, :])  # V vs r curve
-        self.ax_phasor= self.fig.add_subplot(gs[1, 0], projection="polar")
-        self.ax_heatmap=self.fig.add_subplot(gs[1, 1])  # Visibility heat-map
+        # ── FIX 2: taller figure, adjusted GridSpec margins ─────────────────
+        self.fig = plt.figure(figsize=(10.5, 8.0), facecolor=BG)
+        gs = GridSpec(
+            2, 2,
+            figure=self.fig,
+            hspace=0.48,
+            wspace=0.42,          # more horizontal breathing room
+            left=0.07,
+            right=0.96,
+            top=0.93,
+            bottom=0.09,          # ensure bottom row is not clipped
+        )
+        self.ax_main   = self.fig.add_subplot(gs[0, :])      # V vs r curve (full width)
+        self.ax_phasor = self.fig.add_subplot(gs[1, 0], projection="polar")
+        self.ax_heatmap= self.fig.add_subplot(gs[1, 1])      # Visibility heat-map
 
         for ax in (self.ax_main, self.ax_heatmap):
             ax.set_facecolor(PANEL)
@@ -259,42 +279,71 @@ class VisibilityRatioApp:
         # live marker
         ax.scatter([r], [V], s=180, color=MKRCLR, zorder=10,
                    edgecolors="white", linewidths=1.2)
-        ax.axvline(r,   color=MKRCLR, lw=1.2, ls=":")
-        ax.axhline(V,   color=MKRCLR, lw=1.2, ls=":")
-        ax.text(r + self.zoom.get()*0.01, V + 0.02,
+        ax.axvline(r, color=MKRCLR, lw=1.2, ls=":")
+        ax.axhline(V, color=MKRCLR, lw=1.2, ls=":")
+        ax.text(r + self.zoom.get() * 0.01, V + 0.02,
                 f"r={r:.2f}\nV={V:.3f}",
                 color=MKRCLR, fontsize=8.5, va="bottom")
         ax.set_xlim(0, self.zoom.get())
         ax.set_ylim(0, 1.05)
         ax.set_xlabel("Intensity Ratio  r = I₁ / I₂", fontsize=9)
         ax.set_ylabel("Visibility  V", fontsize=9)
-        ax.set_title(f"Visibility vs Intensity Ratio  |  Current: r={r:.3f}, V={V:.4f}",
-                     color=TEXT, fontsize=10, pad=6)
+        ax.set_title(
+            f"Visibility vs Intensity Ratio  |  Current: r={r:.3f}, V={V:.4f}",
+            color=TEXT, fontsize=10, pad=6)
         ax.legend(fontsize=7.5, facecolor=PANEL,
                   edgecolor=HI, labelcolor=TEXT, loc="upper right")
         for sp in ax.spines.values():
             sp.set_edgecolor(HI)
 
-        # ── phasor diagram ────────────────────────────────────────────────
+        # ── phasor diagram ─────────────────────────────────────────────────
+        # Draw on a CARTESIAN axes (converted from polar internally).
+        # ax.annotate on polar axes is unreliable for origin-based arrows;
+        # using ax2.quiver on the polar axes is equally fragile.
+        # Solution: draw everything in Cartesian, label in data coordinates.
         ax2 = self.ax_phasor
         ax2.cla()
         ax2.set_facecolor(PANEL)
         ax2.set_rlabel_position(60)
-        # E1 phasor
+
         E1 = np.sqrt(self.I1.get())
         E2 = np.sqrt(self.I2.get())
-        ax2.annotate("", xy=(0, E1),     xytext=(0, 0),
-                     arrowprops=dict(arrowstyle="-|>", color=CYAN,
-                                     lw=2.2, mutation_scale=14))
-        ax2.annotate("", xy=(phi, E2),   xytext=(0, 0),
-                     arrowprops=dict(arrowstyle="-|>", color=ORANGE,
-                                     lw=2.2, mutation_scale=14))
-        # Resultant
-        E_r = np.sqrt(E1**2 + E2**2 + 2*E1*E2*np.cos(phi))
-        phi_r = np.arctan2(E2*np.sin(phi), E1 + E2*np.cos(phi))
-        ax2.annotate("", xy=(phi_r, E_r), xytext=(0, 0),
-                     arrowprops=dict(arrowstyle="-|>", color=ACCENT,
-                                     lw=2.2, mutation_scale=14))
+
+        # Cartesian components
+        E1x, E1y = E1, 0.0                            # E1 always at 0°
+        E2x, E2y = E2 * np.cos(phi), E2 * np.sin(phi)
+
+        E_r   = np.sqrt(E1**2 + E2**2 + 2 * E1 * E2 * np.cos(phi))
+        phi_r = np.arctan2(E2 * np.sin(phi), E1 + E2 * np.cos(phi))
+
+        # Draw thick lines from origin to each tip
+        ax2.plot([0, 0], [0, E1],   color=CYAN,   lw=2.8, solid_capstyle="round")
+        ax2.plot([0, phi], [0, E2], color=ORANGE, lw=2.8, solid_capstyle="round")
+        ax2.plot([0, phi_r], [0, E_r], color=ACCENT, lw=2.8,
+                 solid_capstyle="round", linestyle="--")
+
+        # Arrowhead dots at tips
+        ax2.scatter([0], [E1],   s=60, color=CYAN,   zorder=5)
+        ax2.scatter([phi], [E2], s=60, color=ORANGE, zorder=5)
+        ax2.scatter([phi_r], [E_r], s=60, color=ACCENT, zorder=5)
+
+        # Labels — placed just beyond the tip radius, same angle
+        r_max  = max(E1, E2, E_r)
+        offset = r_max * 0.20
+
+        ax2.text(0, E1 + offset,
+                 f"E₁={E1:.2f}", color=CYAN,
+                 ha="center", va="bottom", fontsize=8, fontweight="bold")
+
+        lbl_phi2 = phi - 0.28 if abs(phi) < 0.3 else phi
+        ax2.text(lbl_phi2, E2 + offset,
+                 f"E₂={E2:.2f}", color=ORANGE,
+                 ha="center", va="bottom", fontsize=8, fontweight="bold")
+
+        ax2.text(phi_r, E_r + offset,
+                 f"|E|={E_r:.2f}", color=ACCENT,
+                 ha="center", va="bottom", fontsize=8, fontweight="bold")
+
         ax2.set_title("Phasor Diagram", color=TEXT, fontsize=9, pad=12)
         ax2.tick_params(colors=SUBTEXT, labelsize=7)
         ax2.spines["polar"].set_edgecolor(HI)
@@ -303,23 +352,45 @@ class VisibilityRatioApp:
         ax3 = self.ax_heatmap
         ax3.cla()
         ax3.set_facecolor(PANEL)
+
         N    = 200
         i1v  = np.linspace(0.01, 5, N)
         i2v  = np.linspace(0.01, 5, N)
         I1g, I2g = np.meshgrid(i1v, i2v)
         Rg   = I1g / I2g
         Vg   = 2 * np.sqrt(Rg) / (1 + Rg)
-        im = ax3.imshow(Vg, origin="lower", aspect="auto",
-                        extent=[0.01, 5, 0.01, 5],
-                        cmap="plasma", vmin=0, vmax=1,
-                        interpolation="bilinear")
-        self.fig.colorbar(im, ax=ax3, shrink=0.85, label="Visibility V",
-                          pad=0.02)
+
+        im = ax3.imshow(
+            Vg, origin="lower", aspect="auto",
+            extent=[0.01, 5, 0.01, 5],
+            cmap="plasma", vmin=0, vmax=1,
+            interpolation="bilinear",
+        )
+
+        # ── FIX 3: remove old colorbar before adding a new one ────────────
+        if self._cbar is not None:
+            try:
+                self._cbar.remove()
+            except Exception:
+                pass
+        # Use make_axes for a tightly controlled colorbar that never overlaps
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax3)
+        cax = divider.append_axes("right", size="6%", pad=0.08)
+        cax.set_facecolor(PANEL)
+        self._cbar = self.fig.colorbar(im, cax=cax)
+        self._cbar.set_label("Visibility V", color=TEXT, fontsize=8)
+        self._cbar.ax.tick_params(colors=SUBTEXT, labelsize=7)
+        self._cbar.ax.yaxis.label.set_color(TEXT)
+
+        # Live cursor dot on heatmap
         ax3.scatter([self.I1.get()], [self.I2.get()],
                     s=130, color=MKRCLR, zorder=10,
                     edgecolors="white", linewidths=1.2)
+        # Diagonal V=1 line
         ax3.plot([0.01, 5], [0.01, 5], color="white", lw=1.2,
                  ls="--", alpha=0.5, label="I₁ = I₂  (V=1)")
+
         ax3.set_xlabel("I₁  (W)", fontsize=8)
         ax3.set_ylabel("I₂  (W)", fontsize=8)
         ax3.set_title("Visibility Map  (I₁ vs I₂)", fontsize=9, color=TEXT)
