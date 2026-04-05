@@ -180,7 +180,7 @@ class FringePatternApp:
         # ── Path Difference ─────────────────────────────────────────────────
         self._section(parent, "PATH DIFFERENCE")
         self._slider(parent, "Δx  (path diff)", self.delta_x,
-                     -5.0, 5.0, GOLD, res=0.05, fmt="{:.2f}", unit=" μm")
+                     -50.0, 50.0, GOLD, res=0.5, fmt="{:.1f}", unit=" μm")
 
         # Live φ display
         self.phi_frame = tk.Frame(parent, bg="#07111f", pady=6, padx=10)
@@ -495,11 +495,11 @@ class FringePatternApp:
     def _step_anim(self):
         step = self.anim_speed.get()
         val  = self.delta_x.get() + self._anim_dir * step
-        if val >= 5.0:
-            val = 5.0
+        if val >= 50.0:
+            val = 50.0
             self._anim_dir = -1
-        elif val <= -5.0:
-            val = -5.0
+        elif val <= -50.0:
+            val = -50.0
             self._anim_dir = 1
         self.delta_x.set(round(val, 4))
         # _update is triggered automatically by trace; just schedule next
