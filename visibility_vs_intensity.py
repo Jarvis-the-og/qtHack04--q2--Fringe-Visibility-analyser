@@ -53,11 +53,10 @@ matplotlib.rcParams.update({
 })
 
 PRESETS = [
-    ("Perfect Balance",  {"I1": 1.0,  "I2": 1.0,  "phi": 0.0,  "zoom": 10.0}),
-    ("4 : 1 Ratio",      {"I1": 2.0,  "I2": 0.5,  "phi": 0.0,  "zoom": 10.0}),
-    ("9 : 1 Ratio",      {"I1": 4.5,  "I2": 0.5,  "phi": 0.0,  "zoom": 10.0}),
-    ("Zoom Out (r=50)",  {"I1": 5.0,  "I2": 0.5,  "phi": 0.0,  "zoom": 50.0}),
-    ("Phase 90°",        {"I1": 1.0,  "I2": 1.0,  "phi": 90.0, "zoom": 10.0}),
+    ("Perfect Balance",  {"I1": 1.0,  "I2": 1.0,  "zoom": 10.0}),
+    ("4 : 1 Ratio",      {"I1": 2.0,  "I2": 0.5,  "zoom": 10.0}),
+    ("9 : 1 Ratio",      {"I1": 4.5,  "I2": 0.5,  "zoom": 10.0}),
+    ("Zoom Out (r=50)",  {"I1": 5.0,  "I2": 0.5,  "zoom": 50.0}),
 ]
 
 TIPS = {
@@ -70,11 +69,6 @@ TIPS = {
         "Intensity of Beam 2 (W).\n"
         "Sets the denominator of r = I₁/I₂.\n"
         "Increasing this while I₁ is fixed moves r toward 0."
-    ),
-    "Phase Δφ  (phasor only)": (
-        "Phase offset between beams (degrees).\n"
-        "Only affects the phasor diagram — does NOT change\n"
-        "the V vs r curve or the heat-map."
     ),
     "X-axis max r": (
         "Upper limit of the r axis on the V vs r plot.\n"
@@ -116,7 +110,6 @@ class VisibilityRatioApp:
 
         self.I1   = tk.DoubleVar(value=1.0)
         self.I2   = tk.DoubleVar(value=1.0)
-        self.phi  = tk.DoubleVar(value=0.0)
         self.zoom = tk.DoubleVar(value=10.0)
         self._cbar   = None
         self._upd_id = None
@@ -207,8 +200,6 @@ class VisibilityRatioApp:
         self._slider(parent, "I₂  (Beam 2)", self.I2, 0.01, 5.0, ORANGE, unit=" W")
 
         self._section(parent, "DISPLAY")
-        self._slider(parent, "Phase Δφ  (phasor only)", self.phi,
-                     0, 360, "#d4aaff", res=1, fmt="{:.0f}", unit="°")
         self._slider(parent, "X-axis max r", self.zoom,
                      2.0, 50.0, ACCENT, res=0.5, fmt="{:.1f}")
 
@@ -272,12 +263,11 @@ class VisibilityRatioApp:
         gs = GridSpec(2, 2, figure=self.fig, hspace=0.48, wspace=0.42,
                       left=0.07, right=0.96, top=0.93, bottom=0.09)
         self.ax_main    = self.fig.add_subplot(gs[0, :])
-        self.ax_phasor  = self.fig.add_subplot(gs[1, 0], projection="polar")
+        self.ax_2d      = self.fig.add_subplot(gs[1, 0])
         self.ax_heatmap = self.fig.add_subplot(gs[1, 1])
-        for ax in (self.ax_main, self.ax_heatmap):
+        for ax in (self.ax_main, self.ax_heatmap, self.ax_2d):
             ax.set_facecolor(PANEL)
             for sp in ax.spines.values(): sp.set_edgecolor(HI)
-        self.ax_phasor.set_facecolor(PANEL)
         self.canvas = FigureCanvasTkAgg(self.fig, master=parent)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
@@ -286,14 +276,21 @@ class VisibilityRatioApp:
 
     def _compute(self):
         I1   = self.I1.get(); I2 = self.I2.get()
-        phi  = np.deg2rad(self.phi.get())
         r    = I1 / I2
         V    = self._vis_from_ratio(r)
         Imax = (np.sqrt(I1) + np.sqrt(I2))**2
         Imin = (np.sqrt(I1) - np.sqrt(I2))**2
         r_arr = np.linspace(0.001, self.zoom.get(), 2000)
         V_arr = self._vis_from_ratio(r_arr)
-        return r_arr, V_arr, r, V, Imax, Imin, V, phi
+        
+        # 2D fringe pattern simulation
+        y2d = np.linspace(-10, 10, 300)
+        x2d = np.linspace(-2, 2, 100)
+        Y, X = np.meshgrid(y2d, x2d, indexing="ij")
+        k_fringe = 2 * np.pi / 2.0  # arbitrary spatial frequency
+        I2D = I1 + I2 + 2*np.sqrt(I1*I2) * np.cos(k_fringe * Y)
+        
+        return r_arr, V_arr, r, V, Imax, Imin, V, I2D, y2d, x2d
 
     def _quality_label(self, V):
         if V >= 0.90: return "EXCELLENT", ACCENT
@@ -309,7 +306,7 @@ class VisibilityRatioApp:
 
     def _update(self, *_):
         self._upd_id = None
-        r_arr, V_arr, r, V, Imax, Imin, C, phi = self._compute()
+        r_arr, V_arr, r, V, Imax, Imin, C, I2D, y2d, x2d = self._compute()
 
         self.m_ratio.set(f"{r:.4f}")
         self.m_vis.set(f"{V:.4f}")
@@ -353,30 +350,23 @@ class VisibilityRatioApp:
                   labelcolor=TEXT, loc="upper right")
         for sp in ax.spines.values(): sp.set_edgecolor(HI)
 
-        # Phasor
-        ax2 = self.ax_phasor
-        ax2.cla(); ax2.set_facecolor(PANEL); ax2.set_rlabel_position(60)
-        E1 = np.sqrt(self.I1.get()); E2 = np.sqrt(self.I2.get())
-        E_r   = np.sqrt(E1**2 + E2**2 + 2*E1*E2*np.cos(phi))
-        phi_r = np.arctan2(E2*np.sin(phi), E1 + E2*np.cos(phi))
-        ax2.plot([0, 0], [0, E1], color=CYAN,   lw=2.8, solid_capstyle="round")
-        ax2.plot([0, phi], [0, E2], color=ORANGE, lw=2.8, solid_capstyle="round")
-        ax2.plot([0, phi_r], [0, E_r], color=ACCENT, lw=2.8,
-                 solid_capstyle="round", linestyle="--")
-        ax2.scatter([0], [E1], s=60, color=CYAN, zorder=5)
-        ax2.scatter([phi], [E2], s=60, color=ORANGE, zorder=5)
-        ax2.scatter([phi_r], [E_r], s=60, color=ACCENT, zorder=5)
-        r_max = max(E1, E2, E_r); off = r_max * 0.20
-        ax2.text(0, E1+off, f"E₁={E1:.2f}", color=CYAN,
-                 ha="center", va="bottom", fontsize=8, fontweight="bold")
-        lp = phi - 0.28 if abs(phi) < 0.3 else phi
-        ax2.text(lp, E2+off, f"E₂={E2:.2f}", color=ORANGE,
-                 ha="center", va="bottom", fontsize=8, fontweight="bold")
-        ax2.text(phi_r, E_r+off, f"|E|={E_r:.2f}", color=ACCENT,
-                 ha="center", va="bottom", fontsize=8, fontweight="bold")
-        ax2.set_title("Phasor Diagram", color=TEXT, fontsize=9, pad=12)
+        # 2-D Fringe Pattern
+        ax2 = self.ax_2d
+        ax2.cla(); ax2.set_facecolor(PANEL)
+        
+        from matplotlib.colors import LinearSegmentedColormap
+        _fringe_colors = [(0.04, 0.06, 0.14), (0.20, 0.40, 0.80), (1.00, 1.00, 1.00), (0.20, 0.40, 0.80), (0.04, 0.06, 0.14)]
+        FRINGE_CMAP = LinearSegmentedColormap.from_list("fringe", _fringe_colors, N=512)
+        
+        ext = [y2d[0], y2d[-1], x2d[0], x2d[-1]]
+        ax2.imshow(I2D.T, aspect="auto", extent=ext, origin="lower",
+                   cmap=FRINGE_CMAP, interpolation="bilinear", vmin=0, vmax=20.0)
+        
+        ax2.set_title(f"2-D Fringe Pattern (V={V:.3f})", color=TEXT, fontsize=9, pad=12)
+        ax2.set_xlabel("Position", fontsize=8)
+        ax2.set_yticks([])
         ax2.tick_params(colors=SUBTEXT, labelsize=7)
-        ax2.spines["polar"].set_edgecolor(HI)
+        for sp in ax2.spines.values(): sp.set_edgecolor(HI)
 
         # Heat-map
         ax3 = self.ax_heatmap
@@ -414,7 +404,7 @@ class VisibilityRatioApp:
 
     def _apply_preset(self, vals):
         self.I1.set(vals["I1"]); self.I2.set(vals["I2"])
-        self.phi.set(vals["phi"]); self.zoom.set(vals["zoom"])
+        self.zoom.set(vals["zoom"])
 
     def _export(self):
         path = filedialog.asksaveasfilename(
@@ -427,7 +417,7 @@ class VisibilityRatioApp:
 
     def _reset(self):
         self.I1.set(1.0); self.I2.set(1.0)
-        self.phi.set(0.0); self.zoom.set(10.0)
+        self.zoom.set(10.0)
 
 
 def main():

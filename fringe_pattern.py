@@ -81,7 +81,7 @@ TIPS = {
     "Wavelength λ":    "Optical wavelength of the light source (nm).\n380–780 nm is the visible spectrum.\nAffects fringe colour, fringe width β = λL/d, and phase.",
     "Slit sep.  d":   "Distance between the two slits (mm).\nSmaller d → wider fringes (larger β).\nLarger d → finer, more closely packed fringes.",
     "Screen dist L":  "Distance from the slits to the screen (m).\nLarger L → fringes spread out (larger β).\nβ = λL/d",
-    "Δx  (path diff)": "Optical path difference between the two beams (μm).\nφ = 2πΔx/λ shifts the entire fringe pattern.\nAnimate to watch fringes move continuously.",
+
     "I₁  (Beam 1)":    "Intensity of Beam 1 (W).\nEqual I₁=I₂ gives V=1. Any imbalance reduces contrast.",
     "I₂  (Beam 2)":    "Intensity of Beam 2 (W).\nTry setting I₁ ≠ I₂ and watch the fringe contrast drop.",
     "Coherence γ":    "Coherence factor [0, 1].\nγ=1 → perfectly coherent (sharp fringes).\nγ=0 → fully incoherent (no fringes).\nSimulates finite source size or path-length spread.",
@@ -111,13 +111,8 @@ class ToolTip:
 
 
 class FringePatternApp:
-    # ── animation state ─────────────────────────────────────────────────────────────────
-    _anim_id    = None
-    _anim_phase = 0.0
-    _anim_dir   = 1
+    # ── debounce state ────────────────────────────────────────────────────────
     _upd_id     = None
-    _advanced   = True
-    _last_frame_t = 0.0
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -132,10 +127,6 @@ class FringePatternApp:
         self.I1      = tk.DoubleVar(value=1.0)
         self.I2      = tk.DoubleVar(value=1.0)
         self.coh     = tk.DoubleVar(value=1.0)
-        self.theta   = tk.DoubleVar(value=0.0)
-        self.delta_x = tk.DoubleVar(value=0.0)
-        self.sigma_k = tk.DoubleVar(value=8.0)
-        self._adv_frames = []   # populated in _build_controls
 
         self._build_ui()
         self._update()
@@ -206,19 +197,22 @@ class FringePatternApp:
         tk.Label(hdr, text="FRINGE PATTERN SIMULATOR",
                  font=("Courier", 20, "bold"), fg=ACCENT, bg=BG).pack(side="left")
         tk.Label(hdr,
-                 text="  ·  Young's DSE  |  Path Difference  |  Phase Control",
+                 text="  ·  Young's Double-Slit Experiment  |  Live Interference",
                  font=("Courier", 11), fg=SUBTEXT, bg=BG).pack(side="left", pady=4)
         # Action buttons top-right
         ab = tk.Frame(hdr, bg=BG)
         ab.pack(side="right")
-        tk.Button(ab, text="📷 EXPORT", font=("Courier", 9, "bold"),
+        tk.Button(ab, text="📷 EXPORT", font=("Courier", 10, "bold"),
                   fg=BG, bg="#d4aaff", relief="flat", bd=0,
-                  padx=10, pady=6, cursor="hand2",
+                  width=12, padx=14, pady=6, cursor="hand2",
                   command=self._export).pack(side="left", padx=(0, 6))
         tk.Button(ab, text="⟳  RESET", font=("Courier", 10, "bold"),
                   fg=BG, bg=ACCENT, relief="flat", bd=0,
-                  padx=16, pady=6, cursor="hand2",
+                  width=12, padx=14, pady=6, cursor="hand2",
                   command=self._reset).pack(side="left", padx=(0, 4))
+
+        # ── Formula strip — packed FIRST so expand=True on main doesn't hide it
+        self._build_formula_bar()
 
         main = tk.Frame(self.root, bg=BG)
         main.pack(fill="both", expand=True, padx=16, pady=(0, 4))
@@ -250,9 +244,6 @@ class FringePatternApp:
         right.pack(side="left", fill="both", expand=True)
         self._build_canvas(right)
 
-        # ── Formula strip below everything ────────────────────────────────────
-        self._build_formula_bar()
-
     def _build_controls(self, parent):
         tk.Label(parent, text="PARAMETERS",
                  font=("Courier", 12, "bold"), fg=TEXT, bg=PANEL).pack(pady=(6, 0))
@@ -268,28 +259,6 @@ class FringePatternApp:
         self._slider(parent, "Screen dist L", self.L,
                      0.1, 3.0, GOOD, res=0.05, fmt="{:.2f}", unit=" m")
 
-        # ── Path Difference — ADVANCED ──────────────────────────────────────
-        f_pd = tk.Frame(parent, bg=PANEL)
-        f_pd.pack(fill="x")
-        self._adv_frames.append(f_pd)
-        self._section(f_pd, "PATH DIFFERENCE")
-        self._slider(f_pd, "Δx  (path diff)", self.delta_x,
-                     -50.0, 50.0, GOLD, res=0.5, fmt="{:.1f}", unit=" μm")
-
-        # Live φ display
-        self.phi_frame = tk.Frame(parent, bg="#07111f", pady=6, padx=10)
-        self.phi_frame.pack(fill="x", padx=14, pady=(4, 0))
-        self._adv_frames.append(self.phi_frame)
-        tk.Label(self.phi_frame, text="φ = 2π·Δx / λ",
-                 font=("Courier", 8, "bold"), fg=GOLD, bg="#07111f").pack()
-        self.phi_lbl = tk.Label(self.phi_frame, text="φ = 0.0000 rad",
-                                font=("Courier", 9), fg=GOLD, bg="#07111f")
-        self.phi_lbl.pack()
-        self.phi_sub = tk.Label(self.phi_frame,
-                                text="= 2π·0.00/550 = 0.000 rad",
-                                font=("Courier", 7), fg=SUBTEXT, bg="#07111f")
-        self.phi_sub.pack()
-
         # ── Beam Intensities ────────────────────────────────────────────────
         self._section(parent, "BEAM INTENSITIES")
         self._slider(parent, "I₁  (Beam 1)", self.I1,
@@ -301,28 +270,14 @@ class FringePatternApp:
         self._section(parent, "EXTRA EFFECTS")
         self._slider(parent, "Coherence γ", self.coh,
                      0.0, 1.0, PURPLE, res=0.01, fmt="{:.2f}", unit="")
-        self._slider(parent, "Tilt angle θ", self.theta,
-                     -30, 30, RED, res=0.5, fmt="{:.1f}", unit="°")
-        self._slider(parent, "σ envelope (×β)", self.sigma_k,
-                     1.0, 20.0, "#88ffcc", res=0.5, fmt="{:.1f}", unit="×β")
 
-        # Beginner/Advanced toggle
-        tog_row = tk.Frame(parent, bg=PANEL)
-        tog_row.pack(fill="x", padx=14, pady=(6, 0))
-        self._mode_btn = tk.Button(
-            tog_row, text="▽  BEGINNER MODE",
-            font=("Courier", 7, "bold"), fg=ACCENT, bg=HI,
-            relief="flat", bd=0, pady=4, cursor="hand2",
-            command=self._toggle_mode)
-        self._mode_btn.pack(fill="x")
+
 
         # ── Live Metrics ─────────────────────────────────────────────────────
         self._section(parent, "LIVE METRICS")
         self.vis_var    = tk.StringVar(value="—")
         self.fringe_var = tk.StringVar(value="—")
         self.order_var  = tk.StringVar(value="—")
-        self.dx_var     = tk.StringVar(value="—")
-        self.phi_var2   = tk.StringVar(value="—")
         self.shift_var  = tk.StringVar(value="—")
 
         metrics_frame = tk.Frame(parent, bg=PANEL)
@@ -332,8 +287,6 @@ class FringePatternApp:
             ("Visibility V",      self.vis_var,    GOOD),
             ("Fringe width β",    self.fringe_var, ACCENT),
             ("Bright orders ±N",  self.order_var,  ACCENT2),
-            ("Path diff Δx",      self.dx_var,     GOLD),
-            ("Phase φ",           self.phi_var2,   GOLD),
             ("Central max shift", self.shift_var,  PURPLE),
         ]
         
@@ -345,26 +298,6 @@ class FringePatternApp:
             
             tk.Label(box, text=lbl, font=("Courier", 7, "bold"), fg=SUBTEXT, bg=HI).pack(side="top", pady=(2, 0))
             tk.Label(box, textvariable=var, font=("Courier", 9, "bold"), fg=col, bg="#050810").pack(side="bottom", fill="x", pady=2)
-
-        # ── Animation ────────────────────────────────────────────────────────
-        self._section(parent, "ANIMATION")
-        self.anim_btn = tk.Button(
-            parent, text="▶  ANIMATE Δx",
-            font=("Courier", 9, "bold"), fg=BG, bg=PURPLE,
-            relief="flat", bd=0, pady=4, cursor="hand2",
-            command=self._toggle_anim)
-        self.anim_btn.pack(fill="x", padx=14)
-
-        sr = tk.Frame(parent, bg=PANEL, pady=2)
-        sr.pack(fill="x", padx=14)
-        tk.Label(sr, text="Anim speed", font=("Courier", 9),
-                 fg=TEXT, bg=PANEL).pack(side="left")
-        self.anim_speed = tk.DoubleVar(value=0.08)
-        self.fps_lbl = tk.Label(sr, text="— fps", font=("Courier", 8),
-                                fg=SUBTEXT, bg=PANEL)
-        self.fps_lbl.pack(side="right")
-        ttk.Scale(sr, from_=0.01, to=0.30, variable=self.anim_speed,
-                  orient="horizontal", length=100).pack(side="right", padx=(0, 4))
 
         # ── Presets ──────────────────────────────────────────────────────────
         self._section(parent, "PRESETS")
@@ -395,12 +328,12 @@ class FringePatternApp:
 
         # Each formula block: title + formula side by side
         formulas = [
-            ("Intensity",      "I = I₁ + I₂ + 2√(I₁I₂)·γ·cos(ky + φ)",  TEXT),
-            ("Spatial freq",   "k = 2πd / (λL)",                           ACCENT),
-            ("Phase",          "φ = 2π·Δx / λ",                            GOLD),
-            ("Fringe width",   "β = λL / d",                               ACCENT2),
-            ("Visibility",     "V = γ · 2√(I₁I₂) / (I₁+I₂)",             GOOD),
-            ("Central max",    "y₀ = −φ / k = −ΔxL / d",                  PURPLE),
+            ("Intensity",      "I = I₁ + I₂ + 2√(I₁I₂)·γ·cos(ky)",      TEXT),
+            ("Spatial freq",   "k = 2πd / (λL)",                        ACCENT),
+            ("Fringe width",   "β = λL / d",                            ACCENT2),
+            ("Visibility",     "V = γ · 2√(I₁I₂) / (I₁+I₂)",          GOOD),
+            ("Max Intensity",  "I_max = (√I₁ + √I₂)²",                  GOLD),
+            ("Min Intensity",  "I_min = (√I₁ - √I₂)²",                  PURPLE),
         ]
 
         for title, formula, col in formulas:
@@ -457,12 +390,8 @@ class FringePatternApp:
         I1      = self.I1.get()
         I2      = self.I2.get()
         coh     = self.coh.get()
-        theta   = np.deg2rad(self.theta.get())
-        dx_um   = self.delta_x.get()       # μm
-        dx_m    = dx_um * 1e-6             # m
-
-        # ── Phase from path difference ─────────────────────────────────────
-        phi = (2 * np.pi * dx_m) / lam    # radians
+        theta   = 0.0
+        phi     = 0.0  # radians (no external phase offset)
 
         # ── Fringe geometry ────────────────────────────────────────────────
         beta    = lam * L / d              # fringe width (m)
@@ -492,8 +421,8 @@ class FringePatternApp:
         I1D       = I1D * env1d
 
         # ── 2-D pattern ───────────────────────────────────────────────────
-        y2d = np.linspace(-6*beta, 6*beta, 500)
-        x2d = np.linspace(-2*beta, 2*beta, 200)
+        y2d = np.linspace(-10e-3, 10e-3, 500)
+        x2d = np.linspace(-3e-3, 3e-3, 200)
         Y, X = np.meshgrid(y2d, x2d, indexing="ij")
         arg2d = k_fringe * (Y - L * np.tan(theta)) + phi
         I2D   = I1 + I2 + 2*np.sqrt(I1*I2) * coh * np.cos(arg2d)
@@ -503,7 +432,7 @@ class FringePatternApp:
         n_orders = int(5)
         return (y, I1D, y2d, x2d, I2D,
                 beta, V, n_orders,
-                phi, dx_um, y_c_total)
+                phi, y_c_total)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Render
@@ -512,7 +441,7 @@ class FringePatternApp:
         self._upd_id = None
         (y, I1D, y2d, x2d, I2D,
          beta, V, n_orders,
-         phi, dx_um, y_central) = self._compute()
+         phi, y_central) = self._compute()
 
         lam_nm   = self.lam.get()
         rgb      = self._wavelength_to_rgb(lam_nm)
@@ -523,22 +452,19 @@ class FringePatternApp:
         self.vis_var.set(f"{V:.4f}")
         self.fringe_var.set(f"{beta_mm:.3f} mm")
         self.order_var.set(f"± {n_orders}")
-        self.dx_var.set(f"{dx_um:.3f} μm")
-        self.phi_var2.set(f"{phi:.4f} rad")
         self.shift_var.set(f"{y_c_mm:.3f} mm")
-
-        # Update φ formula box
-        self.phi_lbl.config(text=f"φ = {phi:.4f} rad")
-        self.phi_sub.config(
-            text=f"= 2π·{dx_um:.2f}μm / {lam_nm:.0f}nm")
 
         # ── 2-D Fringe image ───────────────────────────────────────────────
         ax = self.ax2d
         ax.cla()
         ax.set_facecolor("#000")
         ext = [y2d[0]*1e3, y2d[-1]*1e3, x2d[0]*1e3, x2d[-1]*1e3]
+        
+        from matplotlib.colors import LinearSegmentedColormap, Normalize
+        dyn_cmap = LinearSegmentedColormap.from_list("dyn", [(0.0, 0.0, 0.0), rgb, (1.0, 1.0, 1.0)], N=256)
+        
         ax.imshow(I2D.T, aspect="auto", extent=ext, origin="lower",
-                  cmap=FRINGE_CMAP, interpolation="bilinear")
+                  cmap=dyn_cmap, interpolation="bilinear", vmin=0, vmax=8.0)
 
         # Central maximum marker
         if abs(y_c_mm) <= y2d[-1]*1e3:
@@ -552,7 +478,7 @@ class FringePatternApp:
         ax.set_title(
             f"2-D Fringe Pattern  |  λ={lam_nm:.0f} nm  "
             f"d={self.d.get():.2f} mm  L={self.L.get():.2f} m  "
-            f"Δx={dx_um:.2f} μm  φ={phi:.3f} rad  V={V:.3f}",
+            f"V={V:.3f}",
             color=TEXT, fontsize=9.5, pad=6)
         for sp in ax.spines.values():
             sp.set_edgecolor(HI)
@@ -609,6 +535,9 @@ class FringePatternApp:
 
         # ── 3D Setup Model ─────────────────────────────────────────────────
         ax3 = self.ax3d
+        current_elev = ax3.elev
+        current_azim = ax3.azim
+        
         ax3.cla()
         ax3.set_facecolor("#000008")
         
@@ -616,7 +545,7 @@ class FringePatternApp:
         Z_screen = 10
         d_mm = self.d.get()
         L_m = self.L.get()
-        theta_rad = np.deg2rad(self.theta.get())
+        theta_rad = 0.0
         I1_val = self.I1.get()
         I2_val = self.I2.get()
         coh_val = self.coh.get()
@@ -656,14 +585,12 @@ class FringePatternApp:
                                      np.linspace(-wall_h/2, wall_h/2, len(x2d_c)), indexing="ij")
         Z_surf = np.full_like(X_surf, Z_sc)
         
-        from matplotlib.colors import Normalize
-        norm = Normalize(vmin=0, vmax=I2D.max() if I2D.max() > 0 else 1)
-        colors_surf = FRINGE_CMAP(norm(coarse_I2D))
+        norm = Normalize(vmin=0, vmax=8.0)
+        colors_surf = dyn_cmap(norm(coarse_I2D))
         ax3.plot_surface(X_surf, Y_surf, Z_surf, facecolors=colors_surf, shade=False, alpha=0.9)
         
         # 3. Wavy Incoming Blue Light
-        # Using dx_um as a time proxy to animate the wave slightly
-        wave_phase = dx_um * 0.5 
+        wave_phase = 0.0 
         X_in, Z_in = np.meshgrid(np.linspace(-wall_w/2, wall_w/2, 25), np.linspace(-6, Z_back, 30))
         Y_in = 0.4 * np.cos(2.5 * Z_in - wave_phase)
         ax3.plot_surface(X_in, Y_in, Z_in, color=rgb, alpha=0.3, shade=False)
@@ -685,18 +612,18 @@ class FringePatternApp:
         cyan_alpha = 0.25
         v1_polys = [
             [[-d_mm/2, 0, Z_slit], [-wall_w/2, wall_h/2, Z_sc], [-wall_w/2, -wall_h/2, Z_sc]],
-            [[-d_mm/2, 0, Z_slit], [0, wall_h/2, Z_sc], [0, -wall_h/2, Z_sc]],
-            [[-d_mm/2, 0, Z_slit], [-wall_w/2, wall_h/2, Z_sc], [0, wall_h/2, Z_sc]],
-            [[-d_mm/2, 0, Z_slit], [-wall_w/2, -wall_h/2, Z_sc], [0, -wall_h/2, Z_sc]]
+            [[-d_mm/2, 0, Z_slit], [wall_w/2, wall_h/2, Z_sc], [wall_w/2, -wall_h/2, Z_sc]],
+            [[-d_mm/2, 0, Z_slit], [-wall_w/2, wall_h/2, Z_sc], [wall_w/2, wall_h/2, Z_sc]],
+            [[-d_mm/2, 0, Z_slit], [-wall_w/2, -wall_h/2, Z_sc], [wall_w/2, -wall_h/2, Z_sc]]
         ]
         if I1_val > 0.01:
             ax3.add_collection3d(Poly3DCollection(v1_polys, facecolors=rgb, edgecolors='white', linewidths=0.8, alpha=cyan_alpha * I1_val))
             
         v2_polys = [
-            [[d_mm/2, 0, Z_slit], [0, wall_h/2, Z_sc], [0, -wall_h/2, Z_sc]],
+            [[d_mm/2, 0, Z_slit], [-wall_w/2, wall_h/2, Z_sc], [-wall_w/2, -wall_h/2, Z_sc]],
             [[d_mm/2, 0, Z_slit], [wall_w/2, wall_h/2, Z_sc], [wall_w/2, -wall_h/2, Z_sc]],
-            [[d_mm/2, 0, Z_slit], [0, wall_h/2, Z_sc], [wall_w/2, wall_h/2, Z_sc]],
-            [[d_mm/2, 0, Z_slit], [0, -wall_h/2, Z_sc], [wall_w/2, -wall_h/2, Z_sc]]
+            [[d_mm/2, 0, Z_slit], [-wall_w/2, wall_h/2, Z_sc], [wall_w/2, wall_h/2, Z_sc]],
+            [[d_mm/2, 0, Z_slit], [-wall_w/2, -wall_h/2, Z_sc], [wall_w/2, -wall_h/2, Z_sc]]
         ]
         if I2_val > 0.01:
             ax3.add_collection3d(Poly3DCollection(v2_polys, facecolors=rgb, edgecolors='white', linewidths=0.8, alpha=cyan_alpha * I2_val))
@@ -713,66 +640,29 @@ class FringePatternApp:
         ax3.set_zlim(-6, 14)
         ax3.set_axis_off()
         ax3.set_title("3D Experiment Setup (Live Overlay)", color=TEXT, fontsize=11, pad=-25, fontweight="bold")
-        ax3.view_init(elev=25, azim=-55)
+        if not hasattr(self, '_view_initialized'):
+            ax3.view_init(elev=25, azim=-55)
+            self._view_initialized = True
+        else:
+            ax3.view_init(elev=current_elev, azim=current_azim)
 
         self.canvas.draw_idle()
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Animation
-    # ─────────────────────────────────────────────────────────────────────────
-    def _toggle_anim(self):
-        if self._anim_id is None:
-            self._anim_running = True
-            self.anim_btn.config(text="■  STOP ANIMATION", bg=RED)
-            self._step_anim()
-        else:
-            self.root.after_cancel(self._anim_id)
-            self._anim_id = None
-            self.anim_btn.config(text="▶  ANIMATE Δx", bg=PURPLE)
-
-    def _step_anim(self):
-        import time
-        t0   = time.perf_counter()
-        step = self.anim_speed.get()
-        val  = self.delta_x.get() + self._anim_dir * step
-        if val >= 50.0:  val = 50.0;  self._anim_dir = -1
-        elif val <= -50.0: val = -50.0; self._anim_dir = 1
-        self.delta_x.set(round(val, 4))
-        elapsed = time.perf_counter() - t0
-        fps = 1.0 / max(elapsed + 0.040, 0.001)
-        self.fps_lbl.config(text=f"{fps:.0f} fps")
-        self._anim_id = self.root.after(40, self._step_anim)
 
 
     # ─────────────────────────────────────────────────────────────────────────
     def _reset(self):
-        if self._anim_id:
-            self._toggle_anim()
         self.lam.set(550); self.d.set(0.5); self.L.set(1.0)
         self.I1.set(1.0);  self.I2.set(1.0); self.coh.set(1.0)
-        self.theta.set(0.0); self.delta_x.set(0.0); self.sigma_k.set(8.0)
-        self._anim_dir = 1
-        self.fps_lbl.config(text="— fps")
+        self._view_initialized = False   # ← resets 3D camera to default angle
+        self._update()                   # ← immediately re-renders everything
 
-    def _toggle_mode(self):
-        self._advanced = not self._advanced
-        if self._advanced:
-            self._mode_btn.config(text="▽  BEGINNER MODE")
-            for w in self._adv_frames:
-                w.pack(fill="x")
-        else:
-            self._mode_btn.config(text="△  ADVANCED MODE")
-            for w in self._adv_frames:
-                w.pack_forget()
+
 
 
     def _apply_preset(self, vals):
-        if self._anim_id:
-            self._toggle_anim()
         self.lam.set(vals["lam"]); self.d.set(vals["d"]); self.L.set(vals["L"])
         self.I1.set(vals["I1"]);   self.I2.set(vals["I2"]); self.coh.set(vals["coh"])
-        self.theta.set(vals["theta"]); self.delta_x.set(vals["dx"])
-        self.sigma_k.set(vals["sig"])
 
     def _export(self):
         path = filedialog.asksaveasfilename(

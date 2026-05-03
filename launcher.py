@@ -26,9 +26,9 @@ COLOR = {
 }
 
 # Accent color per module (index-aligned with MODULES list below)
-MODULE_ACCENTS = ["#00d4ff", "#7df9ff", "#c8ff5c"]
+MODULE_ACCENTS = ["#7df9ff", "#c8ff5c"]
 
-FONT = "Courier"
+FONT = "Segoe UI"
 
 # Spacing scale (pixels)
 SP = {1: 4, 2: 8, 3: 12, 4: 16, 5: 24, 6: 32, 7: 48}
@@ -44,26 +44,16 @@ CONTENT_PAD_X = SP[7] # left/right padding inside the content column
 MODULES = [
     {
         "number": "01",
-        "title":  "Two Beams Variation",
-        "desc": (
-            "Adjust individual beam intensities I₁ and I₂, phase offset Δφ, and "
-            "spatial frequency k. Beam profiles and the combined interference pattern "
-            "update in real time."
-        ),
-        "file": "two_beams_variation.py",
-    },
-    {
-        "number": "02",
         "title":  "Fringe Pattern Simulator",
         "desc": (
             "Full Young's double-slit geometry. Control wavelength λ, slit separation d, "
             "screen distance L, coherence γ, and tilt angle θ. Renders a live 2-D fringe "
-            "pattern."
+            "pattern and an interactive 3-D simulation."
         ),
         "file": "fringe_pattern.py",
     },
     {
-        "number": "03",
+        "number": "02",
         "title":  "Visibility vs Intensity Ratio",
         "desc": (
             "Plots the analytic curve V = 2√r / (1+r). A live marker tracks the current "
@@ -97,10 +87,9 @@ THEORY = [
             "        V  =  2√(I₁ · I₂) / ( I₁ + I₂ )\n\n"
             "This is the geometric-mean–to–arithmetic-mean ratio of the amplitudes.\n"
             "When I₁ = I₂ the formula gives V = 1. Any imbalance strictly reduces "
-            "contrast — a 4:1 intensity ratio already drops V to 0.8. The three "
+            "contrast — a 4:1 intensity ratio already drops V to 0.8. The two "
             "simulation modules let you explore this relationship from complementary "
-            "perspectives: waveform superposition, 2-D spatial pattern, and analytic "
-            "curve with heat-map."
+            "perspectives: 2-D spatial pattern, and analytic curve with heat-map."
         ),
     },
 ]
@@ -111,9 +100,10 @@ THEORY = [
 
 def label(parent, text, size=9, weight="normal", color="text", **kw):
     """Shorthand for a consistently styled tk.Label."""
+    scaled_size = int(size * 1.35)
     return tk.Label(
         parent, text=text,
-        font=(FONT, size, weight),
+        font=(FONT, scaled_size, weight),
         fg=COLOR[color], bg=parent["bg"],
         **kw,
     )
@@ -212,7 +202,7 @@ class ModuleRow(tk.Frame):
 
         btn = tk.Button(
             btn_frame, text="Launch  ▶",
-            font=(FONT, 8, "bold"),
+            font=(FONT, 11, "bold"),
             fg=COLOR["bg"], bg=accent,
             relief="flat", bd=0,
             padx=SP[4], pady=SP[3],
@@ -226,7 +216,7 @@ class ModuleRow(tk.Frame):
         # Status dot
         self._dot = tk.Label(
             btn_frame, text="●",
-            font=(FONT, 10), fg=COLOR["border"], bg=COLOR["surface"]
+            font=(FONT, 13), fg=COLOR["border"], bg=COLOR["surface"]
         )
         self._dot.pack(pady=(4, 0))
 

@@ -16,9 +16,8 @@
 4. [Installation & Requirements](#installation--requirements)
 5. [Running the Application](#running-the-application)
 6. [Module Reference](#module-reference)
-   - [Module 01 — Two Beams Variation](#module-01--two-beams-variation)
-   - [Module 02 — Fringe Pattern Simulator](#module-02--fringe-pattern-simulator)
-   - [Module 03 — Visibility vs Intensity Ratio](#module-03--visibility-vs-intensity-ratio)
+   - [Module 01 — Fringe Pattern Simulator](#module-01--fringe-pattern-simulator)
+   - [Module 02 — Visibility vs Intensity Ratio](#module-02--visibility-vs-intensity-ratio)
 7. [UI Architecture](#ui-architecture)
    - [Launcher Window](#launcher-window)
    - [Scrolling & Responsiveness](#scrolling--responsiveness)
@@ -26,9 +25,8 @@
 8. [Control Reference](#control-reference)
    - [Module 01 Controls](#module-01-controls)
    - [Module 02 Controls](#module-02-controls)
-   - [Module 03 Controls](#module-03-controls)
 9. [Live Metrics Explained](#live-metrics-explained)
-10. [Animation System (Module 02)](#animation-system-module-02)
+10. [Animation System (Module 01)](#animation-system-module-01)
 11. [Key Formulas Quick Reference](#key-formulas-quick-reference)
 12. [Known Fixes & Patch Notes](#known-fixes--patch-notes)
 13. [Keyboard Shortcuts](#keyboard-shortcuts)
@@ -41,7 +39,7 @@
 
 The **Fringe Visibility Analyzer** is a multi-window Python/Tkinter desktop application backed by Matplotlib for real-time scientific visualization. It is aimed at students, educators, and researchers who want an intuitive, hands-on way to understand the physics of optical interference — specifically how the *visibility* (contrast) of interference fringes responds to changes in beam intensity, path difference, coherence, and experimental geometry.
 
-The suite launches from a central **Launcher** window that presents background theory and links to three independent simulation modules. Each module opens in its own window and can run simultaneously; no module depends on another at runtime.
+The suite launches from a central **Launcher** window that presents background theory and links to two independent simulation modules. Each module opens in its own window and can run simultaneously; no module depends on another at runtime.
 
 All plots update in real time as the user drags sliders — there are no "Apply" buttons. The suite runs entirely offline; no network connection is required.
 
@@ -135,14 +133,13 @@ In Young's double-slit geometry:
 fringe-visibility-analyzer/
 │
 ├── launcher.py                  # Main entry point — the hub window
-├── two_beams_variation.py       # Module 01 — waveform superposition
-├── fringe_pattern.py            # Module 02 — full Young's DSE simulator
-├── visibility_vs_intensity.py   # Module 03 — analytic curve + heat-map
+├── fringe_pattern.py            # Module 01 — full Young's DSE simulator
+├── visibility_vs_intensity.py   # Module 02 — analytic curve + heat-map
 │
 └── README.md                    # This file
 ```
 
-All four files are self-contained. The launcher discovers module files relative to its own location using `os.path.dirname(os.path.abspath(__file__))`, so the working directory does not need to match the source directory.
+All three files are self-contained. The launcher discovers module files relative to its own location using `os.path.dirname(os.path.abspath(__file__))`, so the working directory does not need to match the source directory.
 
 ---
 
@@ -191,7 +188,6 @@ The Launcher window opens maximized. Click **Launch ▶** on any module card to 
 Each simulation file is independently executable:
 
 ```bash
-python two_beams_variation.py
 python fringe_pattern.py
 python visibility_vs_intensity.py
 ```
@@ -200,36 +196,7 @@ python visibility_vs_intensity.py
 
 ## Module Reference
 
-### Module 01 — Two Beams Variation
-
-**File:** `two_beams_variation.py`  
-**Window size:** 1200 × 780 px (resizable)
-
-This module provides the most direct view of the interference mechanism. Three plots update simultaneously:
-
-| Plot | Description |
-|------|-------------|
-| **Top (full width)** | Combined intensity `I(x)` — the superposition of both beams. Horizontal dashed lines mark `I_max` and `I_min`. A fringe-pattern overlay is rendered using `imshow` at 6% opacity to give an intuitive sense of the 2-D pattern. |
-| **Bottom-left** | Individual intensity profile for **Beam 1**: `I₁(1 + cos(kx))` |
-| **Bottom-right** | Individual intensity profile for **Beam 2**: `I₂(1 + cos(kx + Δφ))` |
-
-The bottom two plots make it easy to see how the phase shift `Δφ` slides Beam 2's profile relative to Beam 1, and how the amplitude difference between them governs the combined pattern's contrast.
-
-**Physics implemented:**
-
-```python
-I_combined = I1 + I2 + 2 * sqrt(I1 * I2) * cos(k * x + phi)
-I_beam1    = I1 * (1 + cos(k * x))
-I_beam2    = I2 * (1 + cos(k * x + phi))
-
-I_max = (sqrt(I1) + sqrt(I2)) ** 2
-I_min = (sqrt(I1) - sqrt(I2)) ** 2
-V     = (I_max - I_min) / (I_max + I_min)
-```
-
----
-
-### Module 02 — Fringe Pattern Simulator
+### Module 01 — Fringe Pattern Simulator
 
 **File:** `fringe_pattern.py`  
 **Window size:** 1380 × 880 px (resizable)
@@ -257,11 +224,11 @@ V  = γ · 2√(I₁I₂) / (I₁+I₂)
 
 A Gaussian envelope `exp(−y²/2σ²)` with `σ = 8β` simulates the finite-slit diffraction envelope.
 
-**Animation feature:** The `Δx` slider can be animated automatically (see [Animation System](#animation-system-module-02)), sweeping the path difference back and forth to show moving fringes in real time.
+**Animation feature:** The `Δx` slider can be animated automatically (see [Animation System](#animation-system-module-01)), sweeping the path difference back and forth to show moving fringes in real time.
 
 ---
 
-### Module 03 — Visibility vs Intensity Ratio
+### Module 02 — Visibility vs Intensity Ratio
 
 **File:** `visibility_vs_intensity.py`  
 **Window size:** 1440 × 860 px (resizable)
@@ -316,7 +283,7 @@ All colours are defined once in a `COLOR` dict (Launcher) or equivalent module-l
 | `text` | `#dde4f0` | Primary readable text |
 | `subtext` | `#6b728c` | Secondary / muted text |
 
-Each module defines its own accent palette aligned to its physical interpretation (e.g., cyan for Beam 1, orange for Beam 2, lime-green for visibility).
+Each module defines its own accent palette aligned to its physical interpretation (e.g., cyan, lime-green, orange).
 
 Matplotlib `rcParams` are configured globally in each module to inherit the dark theme, including axes face colour, edge colour, tick colour, grid colour, and font family (`monospace`).
 
@@ -325,19 +292,6 @@ Matplotlib `rcParams` are configured globally in each module to inherit the dark
 ## Control Reference
 
 ### Module 01 Controls
-
-| Slider | Range | Default | Description |
-|--------|-------|---------|-------------|
-| **I₁ (Beam 1)** | 0.01 – 2.00 W | 1.00 | Intensity of Beam 1 |
-| **I₂ (Beam 2)** | 0.01 – 2.00 W | 1.00 | Intensity of Beam 2 |
-| **Phase Δφ** | 0 – 360 ° | 0 | Relative phase offset between beams |
-| **Freq k** | 1.0 – 12.0 | 4.0 | Spatial frequency of the fringe pattern |
-
-**Reset Defaults** button restores all four sliders to their initial values.
-
----
-
-### Module 02 Controls
 
 | Slider | Range | Default | Description |
 |--------|-------|---------|-------------|
@@ -357,7 +311,7 @@ A live **φ formula box** in the control panel updates every time `Δx` or `λ` 
 
 ---
 
-### Module 03 Controls
+### Module 02 Controls
 
 | Slider | Range | Default | Description |
 |--------|-------|---------|-------------|
@@ -372,18 +326,9 @@ A live **φ formula box** in the control panel updates every time `Δx` or `λ` 
 
 ## Live Metrics Explained
 
-All three modules maintain a live metrics panel that updates on every slider move.
+All two modules maintain a live metrics panel that updates on every slider move.
 
 ### Module 01 Metrics
-
-| Metric | Formula | Meaning |
-|--------|---------|---------|
-| **Visibility V** | `(I_max − I_min)/(I_max + I_min)` | Fringe contrast (0–1) |
-| **I_max** | `(√I₁ + √I₂)²` | Peak intensity |
-| **I_min** | `(√I₁ − √I₂)²` | Trough intensity |
-| **I₁ / I₂** | Direct ratio | Intensity balance indicator |
-
-### Module 02 Metrics
 
 | Metric | Formula | Meaning |
 |--------|---------|---------|
@@ -394,7 +339,7 @@ All three modules maintain a live metrics panel that updates on every slider mov
 | **Phase φ** | `2π·Δx/λ` | Phase from path difference (rad) |
 | **Central max shift** | `−φ/k + y_tilt` | Lateral displacement of m=0 fringe (mm) |
 
-### Module 03 Metrics
+### Module 02 Metrics
 
 | Metric | Formula | Meaning |
 |--------|---------|---------|
@@ -415,9 +360,9 @@ The **Fringe Quality badge** maps V to a qualitative label:
 
 ---
 
-## Animation System (Module 02)
+## Animation System (Module 01)
 
-Module 02 includes an **Animate Δx** feature that sweeps the path difference slider automatically, producing a live moving-fringe effect.
+Module 01 includes an **Animate Δx** feature that sweeps the path difference slider automatically, producing a live moving-fringe effect.
 
 **How it works:**
 
@@ -466,16 +411,7 @@ Effective visibility with coherence:
 
 ## Known Fixes & Patch Notes
 
-### Module 01 (`two_beams_variation.py`)
-
-**FIX 1 & 2 — Beam formula consistency:**
-A spurious `+ np.pi/4` hardcoded offset was previously applied to Beam 2's individual intensity profile. This caused a visual inconsistency: the Beam 2 plot was shifted by π/4 relative to its contribution to the combined pattern. The fix removes the offset so that:
-- Beam 1 is the phase reference: `I₁(1 + cos(kx))`
-- Beam 2 carries the full relative shift: `I₂(1 + cos(kx + Δφ))`
-
-Both individual profiles are now fully consistent with the combined interference formula.
-
-### Module 03 (`visibility_vs_intensity.py`)
+### Module 02 (`visibility_vs_intensity.py`)
 
 **FIX 1 — Phasor label placement:**
 Labels (`E₁`, `E₂`, `|E|`) previously used erroneous Cartesian offsets inside polar axes, causing them to appear at wrong positions or off-screen. Labels now use polar coordinate placement — offset by `r_max * 0.20` beyond each arrow tip along its own angle — so they always sit cleanly at their respective arrowheads regardless of slider position.
@@ -533,13 +469,13 @@ This can happen on machines with integrated graphics or slow Python installation
 **`_tkinter.TclError: no display name and no $DISPLAY environment variable` on Linux.**
 You are running in a headless environment. The suite requires a graphical display. Set up X forwarding (`ssh -X`) or use a virtual display (`Xvfb`).
 
-**Colorbar overlaps the heatmap in Module 03.**
-This should be resolved by FIX 2 and FIX 3 (see [Patch Notes](#known-fixes--patch-notes)). If it persists, try maximizing the Module 03 window to give Matplotlib more space for the layout engine to work with.
+**Colorbar overlaps the heatmap in Module 02.**
+This should be resolved by FIX 2 and FIX 3 (see [Patch Notes](#known-fixes--patch-notes)). If it persists, try maximizing the Module 02 window to give Matplotlib more space for the layout engine to work with.
 
 **`ModuleNotFoundError: No module named 'matplotlib'`.**
 Install the dependencies: `pip install matplotlib numpy`.
 
-**The animation in Module 02 runs too fast or too slow.**
+**The animation in Module 01 runs too fast or too slow.**
 Adjust the **Anim speed** slider. The `root.after(40, ...)` call targets ~25 fps; actual speed depends on rendering time per frame on your hardware. Reducing the 2-D array resolution (see above) will also speed up the animation.
 
 **Text in theory blocks wraps incorrectly or overflows.**
