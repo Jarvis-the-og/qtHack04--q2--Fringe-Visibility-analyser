@@ -2,6 +2,11 @@
 Fringe Visibility Analyzer — Launcher
 """
 
+import sys, ctypes
+if sys.platform == "win32":
+    try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception: pass
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess, sys, os
@@ -218,11 +223,22 @@ class ModuleRow(tk.Frame):
         btn.bind("<Enter>", lambda e: btn.config(bg="#ffffff", fg=accent))
         btn.bind("<Leave>", lambda e: btn.config(bg=accent, fg=COLOR["bg"]))
 
+        # Status dot
+        self._dot = tk.Label(
+            btn_frame, text="●",
+            font=(FONT, 10), fg=COLOR["border"], bg=COLOR["surface"]
+        )
+        self._dot.pack(pady=(4, 0))
+
         # Column weight: text column stretches
         self.grid_columnconfigure(2, weight=1)
 
+    def set_status(self, status):
+        """Update the status dot: 'idle', 'running', 'done'."""
+        colors = {"idle": COLOR["border"], "running": "#44ff88", "done": "#ff5555"}
+        self._dot.config(fg=colors.get(status, COLOR["border"]))
+
     def reflow(self, available_width):
-        # Button column ~130 px, badge ~64 px, divider ~24 px, gaps ~32 px
         self._desc.config(wraplength=max(200, available_width - 250))
 
 
@@ -237,6 +253,7 @@ class Launcher(tk.Tk):
         self.title("Fringe Visibility Analyzer  ·  Launcher")
         self.configure(bg=COLOR["bg"])
         self.resizable(True, True)
+        self._proc_map: dict[str, subprocess.Popen] = {}   # file → process
 
         self._theory_blocks: list[TheoryBlock] = []
         self._module_rows:   list[ModuleRow]   = []
@@ -249,6 +266,8 @@ class Launcher(tk.Tk):
         self.bind("<F11>",     self._toggle_fullscreen)
         self.bind("<Escape>",  self._exit_fullscreen)
         self.bind("<Configure>", self._on_window_resize)
+        self._poll_processes()
+
 
     # ── Initialisation helpers ────────────────────────────────────────────────
 
@@ -394,12 +413,27 @@ class Launcher(tk.Tk):
         here = os.path.dirname(os.path.abspath(__file__))
         path = os.path.join(here, filename)
         if not os.path.exists(path):
-            messagebox.showerror(
-                "File not found",
-                f"Could not find:\n{path}",
-            )
+            messagebox.showerror("File not found", f"Could not find:\n{path}")
             return
-        subprocess.Popen([sys.executable, path])
+        proc = subprocess.Popen([sys.executable, path])
+        self._proc_map[filename] = proc
+        # find the matching ModuleRow and mark running
+        for mod, row in zip(MODULES, self._module_rows):
+            if mod["file"] == filename:
+                row.set_status("running")
+
+    def _poll_processes(self):
+        """Check every 1 s if launched modules are still alive."""
+        for filename, proc in list(self._proc_map.items()):
+            ret = proc.poll()
+            for mod, row in zip(MODULES, self._module_rows):
+                if mod["file"] == filename:
+                    if ret is None:
+                        row.set_status("running")
+                    else:
+                        row.set_status("done")
+        self.after(1000, self._poll_processes)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

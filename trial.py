@@ -147,7 +147,7 @@ class FringePatternApp:
     # ─────────────────────────────────────────────────────────────────────────
     def _section(self, parent, text):
         f = tk.Frame(parent, bg=PANEL)
-        f.pack(fill="x", padx=14, pady=(8, 2))
+        f.pack(fill="x", padx=14, pady=(16, 3))
         tk.Label(f, text=text, font=("Courier", 8, "bold"),
                  fg=ACCENT, bg=PANEL).pack(side="left")
         tk.Frame(f, bg=HI, height=1).pack(
@@ -155,14 +155,14 @@ class FringePatternApp:
 
     def _slider(self, parent, label, var, lo, hi, color,
                 res=0.01, fmt="{:.2f}", unit=""):
-        row = tk.Frame(parent, bg=PANEL, pady=0)
+        row = tk.Frame(parent, bg=PANEL, pady=3)
         row.pack(fill="x", padx=14)
         top = tk.Frame(row, bg=PANEL)
         top.pack(fill="x")
-        tk.Label(top, text=label, font=("Courier", 9),
+        tk.Label(top, text=label, font=("Courier", 10),
                  fg=TEXT, bg=PANEL).pack(side="left")
         vlbl = tk.Label(top, text=fmt.format(var.get()) + unit,
-                        font=("Courier", 9, "bold"), fg=color,
+                        font=("Courier", 10, "bold"), fg=color,
                         bg=PANEL, width=11)
         vlbl.pack(side="right")
 
@@ -226,25 +226,7 @@ class FringePatternApp:
         ctrl = tk.Frame(main, bg=PANEL, width=330)
         ctrl.pack(side="left", fill="y", padx=(0, 12))
         ctrl.pack_propagate(False)
-
-        canvas = tk.Canvas(ctrl, bg=PANEL, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(ctrl, orient="vertical", command=canvas.yview)
-        scroll_frame = tk.Frame(canvas, bg=PANEL)
-        
-        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas.find_withtag("all")[0], width=e.width))
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        def _on_mousewheel(e):
-            canvas.yview_scroll(int(-1*(e.delta/120)), "units")
-        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
-        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
-
-        self._build_controls(scroll_frame)
+        self._build_controls(ctrl)
 
         right = tk.Frame(main, bg=BG)
         right.pack(side="left", fill="both", expand=True)
@@ -255,7 +237,7 @@ class FringePatternApp:
 
     def _build_controls(self, parent):
         tk.Label(parent, text="PARAMETERS",
-                 font=("Courier", 12, "bold"), fg=TEXT, bg=PANEL).pack(pady=(6, 0))
+                 font=("Courier", 12, "bold"), fg=TEXT, bg=PANEL).pack(pady=(18, 0))
         tk.Label(parent, text="live interference updates",
                  font=("Courier", 8), fg=SUBTEXT, bg=PANEL).pack()
 
@@ -325,26 +307,23 @@ class FringePatternApp:
         self.phi_var2   = tk.StringVar(value="—")
         self.shift_var  = tk.StringVar(value="—")
 
-        metrics_frame = tk.Frame(parent, bg=PANEL)
-        metrics_frame.pack(fill="x", padx=14)
-        
-        metrics = [
+        for lbl, var, col in [
             ("Visibility V",      self.vis_var,    GOOD),
             ("Fringe width β",    self.fringe_var, ACCENT),
             ("Bright orders ±N",  self.order_var,  ACCENT2),
             ("Path diff Δx",      self.dx_var,     GOLD),
             ("Phase φ",           self.phi_var2,   GOLD),
             ("Central max shift", self.shift_var,  PURPLE),
-        ]
-        
-        for i, (lbl, var, col) in enumerate(metrics):
-            r, c = divmod(i, 2)
-            box = tk.Frame(metrics_frame, bg=HI, highlightbackground=col, highlightthickness=1)
-            box.grid(row=r, column=c, sticky="nsew", padx=2, pady=2)
-            metrics_frame.grid_columnconfigure(c, weight=1)
+        ]:
+            row = tk.Frame(parent, bg=HI, pady=5, padx=8, highlightbackground=col, highlightthickness=1)
+            row.pack(fill="x", padx=14, pady=3)
+            tk.Label(row, text=lbl, font=("Courier", 9, "bold"),
+                     fg=SUBTEXT, bg=HI).pack(side="left")
             
-            tk.Label(box, text=lbl, font=("Courier", 7, "bold"), fg=SUBTEXT, bg=HI).pack(side="top", pady=(2, 0))
-            tk.Label(box, textvariable=var, font=("Courier", 9, "bold"), fg=col, bg="#050810").pack(side="bottom", fill="x", pady=2)
+            badge = tk.Frame(row, bg="#050810", padx=6, pady=2, relief="flat")
+            badge.pack(side="right")
+            tk.Label(badge, textvariable=var, font=("Courier", 10, "bold"),
+                     fg=col, bg="#050810").pack(side="right")
 
         # ── Animation ────────────────────────────────────────────────────────
         self._section(parent, "ANIMATION")
@@ -368,16 +347,12 @@ class FringePatternApp:
 
         # ── Presets ──────────────────────────────────────────────────────────
         self._section(parent, "PRESETS")
-        preset_frame = tk.Frame(parent, bg=PANEL)
-        preset_frame.pack(fill="x", padx=14)
-        for i, (name, vals) in enumerate(PRESETS):
-            b = tk.Button(preset_frame, text=name, font=("Courier", 7, "bold"),
+        for name, vals in PRESETS:
+            b = tk.Button(parent, text=name, font=("Courier", 8),
                           fg=TEXT, bg=HI, relief="flat", bd=0,
-                          pady=2, cursor="hand2",
+                          pady=3, cursor="hand2",
                           command=lambda v=vals: self._apply_preset(v))
-            r, c = divmod(i, 2)
-            b.grid(row=r, column=c, sticky="ew", padx=2, pady=1)
-            preset_frame.grid_columnconfigure(c, weight=1)
+            b.pack(fill="x", padx=14, pady=1)
             b.bind("<Enter>", lambda e, w=b: w.config(bg=ACCENT, fg=BG))
             b.bind("<Leave>", lambda e, w=b: w.config(bg=HI, fg=TEXT))
         tk.Label(parent, text="Ctrl+R → reset",
@@ -418,7 +393,7 @@ class FringePatternApp:
         self.fig = plt.figure(figsize=(10.5, 7.5), facecolor=BG)
         gs = GridSpec(3, 2, figure=self.fig,
                       height_ratios=[4, 0.3, 4],
-                      width_ratios=[1.3, 1],
+                      width_ratios=[1, 1.25],
                       hspace=0.46, wspace=0.34,
                       left=0.07, right=0.97, top=0.93, bottom=0.08)
         self.ax2d  = self.fig.add_subplot(gs[0, 0])
